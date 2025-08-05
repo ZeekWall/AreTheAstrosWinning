@@ -75,7 +75,7 @@ header h1 i {
     padding: 2rem;
     margin-bottom: 2rem;
     border: 1px solid rgba(255, 255, 255, 0.2);
-    transition: all 0.3s ease;
+    transition: all 0.3s ease, opacity 0.2s ease;
 }
 
 .game-card:hover {
@@ -228,6 +228,7 @@ header h1 i {
     padding: 1rem;
     background: rgba(255, 255, 255, 0.1);
     border-radius: 10px;
+    transition: opacity 0.2s ease;
 }
 
 .status-dot {
@@ -311,7 +312,7 @@ footer {
     padding: 1.5rem;
     margin-bottom: 2rem;
     border: 1px solid rgba(255, 255, 255, 0.2);
-    transition: all 0.3s ease;
+    transition: all 0.3s ease, opacity 0.2s ease;
 }
 
 .last-game-widget:hover {

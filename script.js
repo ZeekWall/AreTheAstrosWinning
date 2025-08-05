@@ -14,6 +14,11 @@ class AstrosLiveScore {
         this.previousOpponentScore = 0;
         this.isFirstLoad = true;
         
+        // Smart refresh tracking
+        this.lastGameData = null;
+        this.lastLastGameData = null;
+        this.smartRefreshInterval = null;
+        
         this.init();
     }
 
@@ -71,15 +76,34 @@ class AstrosLiveScore {
 
     async fetchGameData() {
         try {
-            this.showLoading();
+            // Store scroll position before any updates
+            const scrollPosition = window.scrollY;
+            
+            // Only show loading on first load, not on refreshes
+            if (this.isFirstLoad) {
+                this.showLoading();
+            }
             this.updateStatus('Fetching game data...');
             
             const gameData = await this.getMLBGameData();
-            this.displayGameData(gameData);
-            this.updateLastUpdated();
+            
+            // Check if data has changed before updating
+            if (this.hasGameDataChanged(gameData)) {
+                this.displayGameData(gameData);
+                this.lastGameData = gameData; // Store for comparison
+                this.updateLastUpdated();
+            } else {
+                // No changes, just update status
+                this.updateStatus('No updates available');
+            }
             
             // Also refresh last game data
             this.fetchLastGameData();
+            
+            // Ensure scroll position is maintained
+            if (!this.isFirstLoad) {
+                window.scrollTo(0, scrollPosition);
+            }
             
         } catch (error) {
             console.error('Error fetching game data:', error);
@@ -250,10 +274,18 @@ class AstrosLiveScore {
 
     async fetchLastGameData() {
         try {
-            this.showLastGameLoading();
+            // Only show loading on first load, not on refreshes
+            if (this.isFirstLoad) {
+                this.showLastGameLoading();
+            }
             
             const lastGameData = await this.getLastMLBGameData();
-            this.displayLastGameData(lastGameData);
+            
+            // Check if last game data has changed before updating
+            if (this.hasLastGameDataChanged(lastGameData)) {
+                this.displayLastGameData(lastGameData);
+                this.lastLastGameData = lastGameData; // Store for comparison
+            }
             
         } catch (error) {
             console.error('Error fetching last game data:', error);
@@ -424,7 +456,7 @@ class AstrosLiveScore {
         const resultText = lastGameData.result === 'win' ? 'WIN' : 
                           lastGameData.result === 'loss' ? 'LOSS' : 'TIE';
         
-        this.lastGameContent.innerHTML = `
+        const newContent = `
             <div class="last-game-score">
                 <div class="last-game-team">
                     <div class="last-game-team-name">Houston Astros</div>
@@ -460,6 +492,9 @@ class AstrosLiveScore {
                 </div>
             </div>
         `;
+        
+        // Use smooth update for last game data as well
+        this.smoothUpdate(this.lastGameContent, newContent);
     }
 
     showLastGameLoading() {
@@ -491,12 +526,10 @@ class AstrosLiveScore {
         this.previousOpponentScore = gameData.opponentScore;
         this.isFirstLoad = false;
         
-        // Update quick status widget
-        // this.updateQuickStatus(gameData); // Removed
-        
         const winningStatus = this.getWinningStatus(gameData);
         
-        this.gameCard.innerHTML = `
+        // Create new content
+        const newContent = `
             <div class="game-status">
                 <span class="status-badge status-${gameData.status.toLowerCase()}">${gameData.status}</span>
             </div>
@@ -537,7 +570,35 @@ class AstrosLiveScore {
             </div>
         `;
         
+        // Smooth update - fade out, update content, fade in
+        if (!this.isFirstLoad) {
+            this.smoothUpdate(this.gameCard, newContent);
+        } else {
+            // Store scroll position for initial load too
+            const scrollPosition = window.scrollY;
+            this.gameCard.innerHTML = newContent;
+            // Restore scroll position
+            window.scrollTo(0, scrollPosition);
+        }
+        
         this.updateStatus(gameData.isLive ? 'Live game in progress' : 'Game data updated');
+    }
+
+    smoothUpdate(element, newContent) {
+        // Store current scroll position
+        const scrollPosition = window.scrollY;
+        
+        // Add fade out effect
+        element.style.opacity = '0.7';
+        element.style.transition = 'opacity 0.2s ease';
+        
+        setTimeout(() => {
+            element.innerHTML = newContent;
+            element.style.opacity = '1';
+            
+            // Restore scroll position
+            window.scrollTo(0, scrollPosition);
+        }, 200);
     }
 
     // updateQuickStatus(gameData) { // Removed
@@ -623,6 +684,15 @@ class AstrosLiveScore {
 
     updateStatus(message) {
         this.statusText.textContent = message;
+        
+        // Add subtle loading indicator during refreshes
+        if (message.includes('Fetching')) {
+            this.statusIndicator.style.opacity = '0.8';
+        } else if (message.includes('No updates')) {
+            this.statusIndicator.style.opacity = '0.6';
+        } else {
+            this.statusIndicator.style.opacity = '1';
+        }
     }
 
     updateLastUpdated() {
@@ -640,9 +710,33 @@ class AstrosLiveScore {
 
     startAutoRefresh() {
         this.stopAutoRefresh(); // Clear any existing interval
-        this.autoRefreshInterval = setInterval(() => {
+        
+        // Smart refresh intervals based on game status
+        const getRefreshInterval = () => {
+            if (!this.lastGameData) return 30000; // Default 30 seconds
+            
+            if (this.lastGameData.isLive) {
+                return 15000; // Live games: refresh every 15 seconds
+            } else if (this.lastGameData.status === 'Scheduled') {
+                return 60000; // Scheduled games: refresh every minute
+            } else {
+                return 300000; // Final games: refresh every 5 minutes
+            }
+        };
+        
+        const performRefresh = () => {
             this.fetchGameData();
-        }, 30000); // Refresh every 30 seconds
+            
+            // Update interval based on current game status
+            const newInterval = getRefreshInterval();
+            if (this.autoRefreshInterval) {
+                clearInterval(this.autoRefreshInterval);
+                this.autoRefreshInterval = setInterval(performRefresh, newInterval);
+            }
+        };
+        
+        // Start with initial interval
+        this.autoRefreshInterval = setInterval(performRefresh, getRefreshInterval());
     }
 
     stopAutoRefresh() {
@@ -693,6 +787,38 @@ class AstrosLiveScore {
             spread: 120,
             startVelocity: 45,
         });
+    }
+
+    hasGameDataChanged(newGameData) {
+        if (!this.lastGameData) return true; // First load
+        
+        // Compare key fields that indicate a change
+        const old = this.lastGameData;
+        const new_ = newGameData;
+        
+        return (
+            old.astrosScore !== new_.astrosScore ||
+            old.opponentScore !== new_.opponentScore ||
+            old.status !== new_.status ||
+            old.inning !== new_.inning ||
+            old.isLive !== new_.isLive ||
+            old.opponent !== new_.opponent
+        );
+    }
+
+    hasLastGameDataChanged(newLastGameData) {
+        if (!this.lastLastGameData) return true; // First load
+        
+        // Compare key fields for last game
+        const old = this.lastLastGameData;
+        const new_ = newLastGameData;
+        
+        return (
+            old.astrosScore !== new_.astrosScore ||
+            old.opponentScore !== new_.opponentScore ||
+            old.result !== new_.result ||
+            old.opponent !== new_.opponent
+        );
     }
 }
 
