@@ -18,6 +18,66 @@ class AstrosLiveScore {
         this.lastLastGameData = null;
         this.smartRefreshInterval = null;
         
+        // Team color mapping for dynamic opponent colors
+        this.teamColors = {
+            117: '#ff6b35', // Houston Astros - Orange
+            140: '#c8102e', // Texas Rangers - Red
+            147: '#003087', // New York Yankees - Navy Blue
+            111: '#0c2340', // Boston Red Sox - Navy Blue
+            121: '#002d72', // New York Mets - Blue
+            120: '#002d72', // Baltimore Orioles - Orange
+            139: '#0c2340', // Tampa Bay Rays - Navy Blue
+            141: '#1d2d5c', // Toronto Blue Jays - Blue
+            142: '#ce1141', // Minnesota Twins - Red
+            145: '#002d72', // Chicago White Sox - Black
+            158: '#0c2340', // Milwaukee Brewers - Navy Blue
+            113: '#ce1141', // Cincinnati Reds - Red
+            114: '#0c2340', // Cleveland Guardians - Navy Blue
+            115: '#0c2340', // Colorado Rockies - Purple
+            116: '#0c2340', // Detroit Tigers - Navy Blue
+            118: '#002d72', // Kansas City Royals - Blue
+            108: '#002d72', // Los Angeles Angels - Red
+            119: '#002d72', // Los Angeles Dodgers - Blue
+            110: '#0c2340', // Baltimore Orioles - Orange
+            121: '#002d72', // New York Mets - Blue
+            133: '#0c2340', // Oakland Athletics - Green
+            143: '#002d72', // Philadelphia Phillies - Red
+            134: '#0c2340', // Pittsburgh Pirates - Black
+            135: '#002d72', // San Diego Padres - Brown
+            137: '#0c2340', // San Francisco Giants - Orange
+            138: '#002d72', // Seattle Mariners - Navy Blue
+            146: '#0c2340', // Miami Marlins - Orange
+            144: '#002d72', // Atlanta Braves - Red
+            121: '#002d72', // Arizona Diamondbacks - Red
+            109: '#0c2340', // Chicago Cubs - Blue
+            112: '#002d72', // Chicago White Sox - Black
+            113: '#ce1141', // Cincinnati Reds - Red
+            114: '#0c2340', // Cleveland Guardians - Navy Blue
+            115: '#0c2340', // Colorado Rockies - Purple
+            116: '#0c2340', // Detroit Tigers - Navy Blue
+            117: '#ff6b35', // Houston Astros - Orange
+            118: '#002d72', // Kansas City Royals - Blue
+            119: '#002d72', // Los Angeles Dodgers - Blue
+            120: '#002d72', // Baltimore Orioles - Orange
+            121: '#002d72', // New York Mets - Blue
+            133: '#0c2340', // Oakland Athletics - Green
+            134: '#0c2340', // Pittsburgh Pirates - Black
+            135: '#002d72', // San Diego Padres - Brown
+            136: '#0c2340', // San Francisco Giants - Orange
+            137: '#0c2340', // San Francisco Giants - Orange
+            138: '#002d72', // Seattle Mariners - Navy Blue
+            139: '#0c2340', // Tampa Bay Rays - Navy Blue
+            140: '#c8102e', // Texas Rangers - Red
+            141: '#1d2d5c', // Toronto Blue Jays - Blue
+            142: '#ce1141', // Minnesota Twins - Red
+            143: '#002d72', // Philadelphia Phillies - Red
+            144: '#002d72', // Atlanta Braves - Red
+            145: '#002d72', // Chicago White Sox - Black
+            146: '#0c2340', // Miami Marlins - Orange
+            147: '#003087', // New York Yankees - Navy Blue
+            158: '#0c2340', // Milwaukee Brewers - Navy Blue
+        };
+        
         this.init();
     }
 
@@ -69,6 +129,9 @@ class AstrosLiveScore {
         }
     }
 
+    getOpponentTeamColor(teamId) {
+        return this.teamColors[teamId] || '#ffffff'; // Default to white if team not found
+    }
 
     async fetchGameData() {
         try {
@@ -120,12 +183,16 @@ class AstrosLiveScore {
             }
             
             const scheduleData = await scheduleResponse.json();
+            console.log('Schedule API response:', scheduleData);
             
             // Check if there's a game today
             if (scheduleData.dates && scheduleData.dates.length > 0 && scheduleData.dates[0].games.length > 0) {
                 const game = scheduleData.dates[0].games[0];
+                console.log('Found game today:', game);
+                console.log('Game status:', game.status);
                 return this.processMLBGameData(game);
             } else {
+                console.log('No game found today, checking upcoming games...');
                 // No game today, check for upcoming games
                 const upcomingResponse = await fetch(`https://statsapi.mlb.com/api/v1/schedule?teamId=${astrosTeamId}&startDate=${today}&endDate=${this.getDateInFuture(7)}&sportId=1`);
                 
@@ -134,11 +201,14 @@ class AstrosLiveScore {
                 }
                 
                 const upcomingData = await upcomingResponse.json();
+                console.log('Upcoming games response:', upcomingData);
                 
                 if (upcomingData.dates && upcomingData.dates.length > 0 && upcomingData.dates[0].games.length > 0) {
                     const upcomingGame = upcomingData.dates[0].games[0];
+                    console.log('Found upcoming game:', upcomingGame);
                     return this.processMLBGameData(upcomingGame, true);
                 } else {
+                    console.log('No upcoming games found');
                     return this.getNoGameData();
                 }
             }
@@ -160,6 +230,12 @@ class AstrosLiveScore {
         let status = game.status.detailedState;
         let isLive = false;
         
+        console.log('Processing game data:', {
+            originalStatus: game.status,
+            detailedState: status,
+            isUpcoming: isUpcoming
+        });
+        
         if (status === 'Live' || status === 'In Progress') {
             isLive = true;
             status = 'Live';
@@ -168,6 +244,8 @@ class AstrosLiveScore {
         } else if (isUpcoming) {
             status = 'Scheduled';
         }
+        
+        console.log('Processed status:', { status, isLive });
         
         const gameTime = new Date(game.gameDate);
         const timeString = gameTime.toLocaleTimeString('en-US', { 
@@ -462,23 +540,43 @@ class AstrosLiveScore {
         const resultText = lastGameData.result === 'win' ? 'WIN' : 
                           lastGameData.result === 'loss' ? 'LOSS' : 'TIE';
         
+        // Check if mobile layout is needed
+        const isMobile = window.innerWidth <= 480;
+        
         const newContent = `
             <div class="last-game-score">
-                <div class="last-game-team">
+                ${isMobile ? `
+                                    <div class="last-game-team">
                     <div class="team-logo">
                         <img src="https://www.mlbstatic.com/team-logos/team-cap-on-dark/117.svg" alt="Houston Astros" onerror="this.style.display='none'">
                     </div>
                     <div class="last-game-team-name">Houston Astros</div>
-                    <div class="last-game-team-score">${lastGameData.astrosScore}</div>
+                    <div class="last-game-team-score astros">${lastGameData.astrosScore}</div>
                 </div>
-                <div class="last-game-vs">VS</div>
                 <div class="last-game-team">
                     <div class="team-logo">
                         <img src="https://www.mlbstatic.com/team-logos/team-cap-on-dark/${lastGameData.opponentTeamId}.svg" alt="${lastGameData.opponent}" onerror="this.style.display='none'">
                     </div>
                     <div class="last-game-team-name">${lastGameData.opponent}</div>
-                    <div class="last-game-team-score">${lastGameData.opponentScore}</div>
+                    <div class="last-game-team-score opponent" style="color: ${this.getOpponentTeamColor(lastGameData.opponentTeamId)};">${lastGameData.opponentScore}</div>
                 </div>
+                ` : `
+                    <div class="last-game-team">
+                        <div class="team-logo">
+                            <img src="https://www.mlbstatic.com/team-logos/team-cap-on-dark/117.svg" alt="Houston Astros" onerror="this.style.display='none'">
+                        </div>
+                        <div class="last-game-team-name">Houston Astros</div>
+                        <div class="last-game-team-score astros">${lastGameData.astrosScore}</div>
+                    </div>
+                    <div class="last-game-vs">VS</div>
+                    <div class="last-game-team">
+                        <div class="team-logo">
+                            <img src="https://www.mlbstatic.com/team-logos/team-cap-on-dark/${lastGameData.opponentTeamId}.svg" alt="${lastGameData.opponent}" onerror="this.style.display='none'">
+                        </div>
+                        <div class="last-game-team-name">${lastGameData.opponent}</div>
+                        <div class="last-game-team-score opponent" style="color: ${this.getOpponentTeamColor(lastGameData.opponentTeamId)};">${lastGameData.opponentScore}</div>
+                    </div>
+                `}
             </div>
             
             <div class="last-game-result ${resultClass}">
@@ -540,7 +638,10 @@ class AstrosLiveScore {
         
         const winningStatus = this.getWinningStatus(gameData);
         
-        // Create new content
+        // Check if mobile layout is needed
+        const isMobile = window.innerWidth <= 480;
+        
+        // Create new content with mobile-optimized layout
         const newContent = `
             <div class="game-status">
                 <span class="status-badge status-${gameData.status.toLowerCase()}">${gameData.status}</span>
@@ -551,21 +652,38 @@ class AstrosLiveScore {
             </div>
             
             <div class="game-info">
-                <div class="team">
+                ${isMobile ? `
+                                    <div class="team">
                     <div class="team-logo">
                         <img src="https://www.mlbstatic.com/team-logos/team-cap-on-dark/117.svg" alt="Houston Astros" onerror="this.style.display='none'">
                     </div>
                     <div class="team-name">Houston Astros</div>
-                    <div class="team-score">${gameData.astrosScore}</div>
+                    <div class="team-score astros">${gameData.astrosScore}</div>
                 </div>
-                <div class="vs">VS</div>
                 <div class="team">
                     <div class="team-logo">
                         <img src="https://www.mlbstatic.com/team-logos/team-cap-on-dark/${gameData.opponentTeamId}.svg" alt="${gameData.opponent}" onerror="this.style.display='none'">
                     </div>
                     <div class="team-name">${gameData.opponent}</div>
-                    <div class="team-score">${gameData.opponentScore}</div>
+                    <div class="team-score opponent" style="color: ${this.getOpponentTeamColor(gameData.opponentTeamId)};">${gameData.opponentScore}</div>
                 </div>
+                ` : `
+                    <div class="team">
+                        <div class="team-logo">
+                            <img src="https://www.mlbstatic.com/team-logos/team-cap-on-dark/117.svg" alt="Houston Astros" onerror="this.style.display='none'">
+                        </div>
+                        <div class="team-name">Houston Astros</div>
+                        <div class="team-score astros">${gameData.astrosScore}</div>
+                    </div>
+                    <div class="vs">VS</div>
+                    <div class="team">
+                        <div class="team-logo">
+                            <img src="https://www.mlbstatic.com/team-logos/team-cap-on-dark/${gameData.opponentTeamId}.svg" alt="${gameData.opponent}" onerror="this.style.display='none'">
+                        </div>
+                        <div class="team-name">${gameData.opponent}</div>
+                        <div class="team-score opponent" style="color: ${this.getOpponentTeamColor(gameData.opponentTeamId)};">${gameData.opponentScore}</div>
+                    </div>
+                `}
             </div>
             
             <div class="game-details">
