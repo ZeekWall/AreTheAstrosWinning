@@ -9,12 +9,20 @@ class AstrosLiveScore {
         this.lastUpdated = document.getElementById('lastUpdated');
         this.autoRefreshInterval = null;
         
+        // Track previous scores for confetti detection
+        this.previousAstrosScore = 0;
+        this.previousOpponentScore = 0;
+        this.isFirstLoad = true;
+        
         this.init();
     }
 
     init() {
         this.refreshBtn.addEventListener('click', () => this.fetchGameData());
         this.autoRefresh.addEventListener('change', () => this.toggleAutoRefresh());
+        
+        // Add mobile-friendly touch events
+        this.addMobileTouchSupport();
         
         // Initial load
         this.fetchGameData();
@@ -25,6 +33,41 @@ class AstrosLiveScore {
             this.startAutoRefresh();
         }
     }
+
+    addMobileTouchSupport() {
+        // Prevent zoom on double tap for mobile
+        let lastTouchEnd = 0;
+        document.addEventListener('touchend', (event) => {
+            const now = (new Date()).getTime();
+            if (now - lastTouchEnd <= 300) {
+                event.preventDefault();
+            }
+            lastTouchEnd = now;
+        }, false);
+
+        // Add haptic feedback for mobile devices
+        if ('vibrate' in navigator) {
+            this.refreshBtn.addEventListener('click', () => {
+                navigator.vibrate(50);
+            });
+        }
+
+        // Optimize for mobile performance
+        this.optimizeForMobile();
+    }
+
+    optimizeForMobile() {
+        // Reduce animation complexity on mobile for better performance
+        const isMobile = window.innerWidth <= 768;
+        
+        if (isMobile) {
+            // Reduce confetti particle count on mobile
+            this.mobileConfettiCount = 100;
+        } else {
+            this.mobileConfettiCount = 200;
+        }
+    }
+
 
     async fetchGameData() {
         try {
@@ -438,6 +481,16 @@ class AstrosLiveScore {
     }
 
     displayGameData(gameData) {
+        // Check if Astros scored (score increased from previous)
+        if (!this.isFirstLoad && gameData.isLive && gameData.astrosScore > this.previousAstrosScore) {
+            this.triggerConfetti();
+        }
+        
+        // Update previous scores
+        this.previousAstrosScore = gameData.astrosScore;
+        this.previousOpponentScore = gameData.opponentScore;
+        this.isFirstLoad = false;
+        
         const winningStatus = this.getWinningStatus(gameData);
         
         this.gameCard.innerHTML = `
@@ -560,6 +613,49 @@ class AstrosLiveScore {
             clearInterval(this.autoRefreshInterval);
             this.autoRefreshInterval = null;
         }
+    }
+
+    triggerConfetti() {
+        // Create a festive confetti animation
+        const count = this.mobileConfettiCount; // Use mobileConfettiCount
+        const defaults = {
+            origin: { y: 0.7 }
+        };
+
+        function fire(particleRatio, opts) {
+            confetti({
+                ...defaults,
+                ...opts,
+                particleCount: Math.floor(count * particleRatio)
+            });
+        }
+
+        fire(0.25, {
+            spread: 26,
+            startVelocity: 55,
+        });
+
+        fire(0.2, {
+            spread: 60,
+        });
+
+        fire(0.35, {
+            spread: 100,
+            decay: 0.91,
+            scalar: 0.8
+        });
+
+        fire(0.1, {
+            spread: 120,
+            startVelocity: 25,
+            decay: 0.92,
+            scalar: 1.2
+        });
+
+        fire(0.1, {
+            spread: 120,
+            startVelocity: 45,
+        });
     }
 }
 
