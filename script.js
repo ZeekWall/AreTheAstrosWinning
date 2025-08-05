@@ -491,6 +491,9 @@ class AstrosLiveScore {
         this.previousOpponentScore = gameData.opponentScore;
         this.isFirstLoad = false;
         
+        // Update quick status widget
+        // this.updateQuickStatus(gameData); // Removed
+        
         const winningStatus = this.getWinningStatus(gameData);
         
         this.gameCard.innerHTML = `
@@ -536,6 +539,40 @@ class AstrosLiveScore {
         
         this.updateStatus(gameData.isLive ? 'Live game in progress' : 'Game data updated');
     }
+
+    // updateQuickStatus(gameData) { // Removed
+    //     let answer = '';
+    //     let className = '';
+        
+    //     if (gameData.isWinning === null) {
+    //         // No game or game not started
+    //         answer = 'No Game';
+    //         className = 'no-game';
+    //     } else if (gameData.astrosScore === gameData.opponentScore) {
+    //         // Game is tied
+    //         answer = 'TIE';
+    //         className = 'tie';
+    //     } else if (gameData.isWinning) {
+    //         // Astros are winning
+    //         answer = 'YES';
+    //         className = 'yes';
+    //     } else {
+    //         // Astros are losing
+    //         answer = 'NO';
+    //         className = 'no';
+    //     }
+        
+    //     // Debug logging
+    //     console.log('Quick Status Update:', { answer, className, gameData });
+        
+    //     if (this.quickStatusAnswer) {
+    //         this.quickStatusAnswer.textContent = answer;
+    //         this.quickStatusAnswer.className = `quick-status-answer ${className}`;
+    //         console.log('Updated quick status element:', this.quickStatusAnswer);
+    //     } else {
+    //         console.error('Quick status answer element not found!');
+    //     }
+    // }
 
     getWinningStatus(gameData) {
         if (gameData.isWinning === null) {
