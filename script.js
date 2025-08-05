@@ -5,7 +5,6 @@ class AstrosLiveScore {
         this.statusIndicator = document.getElementById('statusIndicator');
         this.statusText = document.getElementById('statusText');
         this.refreshBtn = document.getElementById('refreshBtn');
-        this.autoRefresh = document.getElementById('autoRefresh');
         this.lastUpdated = document.getElementById('lastUpdated');
         this.autoRefreshInterval = null;
         
@@ -24,7 +23,6 @@ class AstrosLiveScore {
 
     init() {
         this.refreshBtn.addEventListener('click', () => this.fetchGameData());
-        this.autoRefresh.addEventListener('change', () => this.toggleAutoRefresh());
         
         // Add mobile-friendly touch events
         this.addMobileTouchSupport();
@@ -33,10 +31,8 @@ class AstrosLiveScore {
         this.fetchGameData();
         this.fetchLastGameData();
         
-        // Start auto-refresh if checked
-        if (this.autoRefresh.checked) {
-            this.startAutoRefresh();
-        }
+        // Start smart auto-refresh
+        this.startAutoRefresh();
     }
 
     addMobileTouchSupport() {
@@ -698,14 +694,6 @@ class AstrosLiveScore {
     updateLastUpdated() {
         const now = new Date();
         this.lastUpdated.textContent = now.toLocaleTimeString();
-    }
-
-    toggleAutoRefresh() {
-        if (this.autoRefresh.checked) {
-            this.startAutoRefresh();
-        } else {
-            this.stopAutoRefresh();
-        }
     }
 
     startAutoRefresh() {
