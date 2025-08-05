@@ -181,6 +181,7 @@ class AstrosLiveScore {
             astrosScore: astrosScore,
             opponentScore: opponentScore,
             opponent: opponentTeam.team.name.replace('Houston Astros', '').trim(),
+            opponentTeamId: opponentTeam.team.id,
             inning: this.getInningString(game.linescore),
             status: status,
             time: timeString,
@@ -216,6 +217,7 @@ class AstrosLiveScore {
             astrosScore: 0,
             opponentScore: 0,
             opponent: 'No Game',
+            opponentTeamId: null,
             inning: 'N/A',
             status: 'No Game Today',
             time: 'N/A',
@@ -234,6 +236,7 @@ class AstrosLiveScore {
                 astrosScore: 5,
                 opponentScore: 3,
                 opponent: 'Rangers',
+                opponentTeamId: 140,
                 inning: '7th',
                 status: 'Live',
                 time: '8:30 PM',
@@ -245,6 +248,7 @@ class AstrosLiveScore {
                 astrosScore: 2,
                 opponentScore: 4,
                 opponent: 'Yankees',
+                opponentTeamId: 147,
                 inning: 'Final',
                 status: 'Final',
                 time: '7:10 PM',
@@ -256,6 +260,7 @@ class AstrosLiveScore {
                 astrosScore: 0,
                 opponentScore: 0,
                 opponent: 'Red Sox',
+                opponentTeamId: 111,
                 inning: 'Scheduled',
                 status: 'Scheduled',
                 time: 'Tomorrow 7:10 PM',
@@ -380,6 +385,7 @@ class AstrosLiveScore {
             astrosScore: astrosScore,
             opponentScore: opponentScore,
             opponent: opponentTeam.team.name.replace('Houston Astros', '').trim(),
+            opponentTeamId: opponentTeam.team.id,
             date: dateString,
             time: timeString,
             venue: game.venue.name,
@@ -392,6 +398,7 @@ class AstrosLiveScore {
             astrosScore: 0,
             opponentScore: 0,
             opponent: 'No Recent Games',
+            opponentTeamId: null,
             date: 'N/A',
             time: 'N/A',
             venue: 'N/A',
@@ -408,6 +415,7 @@ class AstrosLiveScore {
                 astrosScore: 6,
                 opponentScore: 4,
                 opponent: 'Rangers',
+                opponentTeamId: 140,
                 date: 'Yesterday',
                 time: '8:30 PM',
                 venue: 'Minute Maid Park',
@@ -417,6 +425,7 @@ class AstrosLiveScore {
                 astrosScore: 2,
                 opponentScore: 5,
                 opponent: 'Yankees',
+                opponentTeamId: 147,
                 date: '2 days ago',
                 time: '7:10 PM',
                 venue: 'Yankee Stadium',
@@ -426,6 +435,7 @@ class AstrosLiveScore {
                 astrosScore: 3,
                 opponentScore: 3,
                 opponent: 'Red Sox',
+                opponentTeamId: 111,
                 date: '3 days ago',
                 time: '7:05 PM',
                 venue: 'Fenway Park',
@@ -455,11 +465,17 @@ class AstrosLiveScore {
         const newContent = `
             <div class="last-game-score">
                 <div class="last-game-team">
+                    <div class="team-logo">
+                        <img src="https://www.mlbstatic.com/team-logos/team-cap-on-dark/117.svg" alt="Houston Astros" onerror="this.style.display='none'">
+                    </div>
                     <div class="last-game-team-name">Houston Astros</div>
                     <div class="last-game-team-score">${lastGameData.astrosScore}</div>
                 </div>
                 <div class="last-game-vs">VS</div>
                 <div class="last-game-team">
+                    <div class="team-logo">
+                        <img src="https://www.mlbstatic.com/team-logos/team-cap-on-dark/${lastGameData.opponentTeamId}.svg" alt="${lastGameData.opponent}" onerror="this.style.display='none'">
+                    </div>
                     <div class="last-game-team-name">${lastGameData.opponent}</div>
                     <div class="last-game-team-score">${lastGameData.opponentScore}</div>
                 </div>
@@ -536,11 +552,17 @@ class AstrosLiveScore {
             
             <div class="game-info">
                 <div class="team">
+                    <div class="team-logo">
+                        <img src="https://www.mlbstatic.com/team-logos/team-cap-on-dark/117.svg" alt="Houston Astros" onerror="this.style.display='none'">
+                    </div>
                     <div class="team-name">Houston Astros</div>
                     <div class="team-score">${gameData.astrosScore}</div>
                 </div>
                 <div class="vs">VS</div>
                 <div class="team">
+                    <div class="team-logo">
+                        <img src="https://www.mlbstatic.com/team-logos/team-cap-on-dark/${gameData.opponentTeamId}.svg" alt="${gameData.opponent}" onerror="this.style.display='none'">
+                    </div>
                     <div class="team-name">${gameData.opponent}</div>
                     <div class="team-score">${gameData.opponentScore}</div>
                 </div>
