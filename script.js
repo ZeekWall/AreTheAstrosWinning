@@ -697,7 +697,8 @@ class AstrosLiveScore {
         
         const timeString = gameDate.toLocaleTimeString('en-US', { 
             hour: 'numeric', 
-            minute: '2-digit'
+            minute: '2-digit',
+            timeZoneName: 'short'
         });
         
         let result = 'tie';
