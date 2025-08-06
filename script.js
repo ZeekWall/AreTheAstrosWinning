@@ -18,6 +18,8 @@ class AstrosLiveScore {
         this.lastLastGameData = null;
         this.smartRefreshInterval = null;
         
+
+        
         // Team color mapping for dynamic opponent colors
         this.teamColors = {
             117: '#ff6b35', // Houston Astros - Orange
@@ -95,6 +97,18 @@ class AstrosLiveScore {
         this.startAutoRefresh();
     }
 
+
+
+
+
+
+
+
+
+
+
+
+
     addMobileTouchSupport() {
         // Prevent zoom on double tap for mobile
         let lastTouchEnd = 0;
@@ -171,8 +185,14 @@ class AstrosLiveScore {
     }
 
     async getMLBGameData() {
-        const today = new Date().toISOString().split('T')[0];
+        // Use local date instead of UTC to avoid timezone issues
+        const today = new Date().toLocaleDateString('en-CA'); // Returns YYYY-MM-DD format
         const astrosTeamId = '117'; // Houston Astros team ID
+        let scheduleData = null;
+        
+        console.log('Requesting game data for date:', today);
+        console.log('Current browser time:', new Date().toISOString());
+        console.log('Current browser date:', new Date().toLocaleDateString());
         
         try {
             // First, get today's schedule for the Astros
@@ -182,17 +202,70 @@ class AstrosLiveScore {
                 throw new Error('Failed to fetch schedule data');
             }
             
-            const scheduleData = await scheduleResponse.json();
+            scheduleData = await scheduleResponse.json();
             console.log('Schedule API response:', scheduleData);
+            console.log('API URL requested:', `https://statsapi.mlb.com/api/v1/schedule?teamId=${astrosTeamId}&date=${today}&sportId=1`);
             
             // Check if there's a game today
             if (scheduleData.dates && scheduleData.dates.length > 0 && scheduleData.dates[0].games.length > 0) {
                 const game = scheduleData.dates[0].games[0];
                 console.log('Found game today:', game);
+                console.log('Game ID:', game.gamePk);
                 console.log('Game status:', game.status);
+                
+                        // If it's a live game, fetch detailed game data to get linescore and batter info
+        if (game.status.detailedState === 'Live' || game.status.detailedState === 'In Progress' || 
+            game.status.detailedState === 'Warmup' || game.status.detailedState === 'Delayed' || 
+            game.status.detailedState === 'Suspended' || game.status.detailedState === 'Rain Delay' ||
+            game.status.abstractGameState === 'Live') {
+                    console.log('Game is live, fetching detailed game data...');
+                    const detailedGameResponse = await fetch(`https://statsapi.mlb.com/api/v1.1/game/${game.gamePk}/feed/live`);
+                    
+                    if (detailedGameResponse.ok) {
+                        const detailedGameData = await detailedGameResponse.json();
+                        console.log('Detailed game data:', detailedGameData);
+                        
+                        // Extract linescore from the detailed data
+                        const linescore = detailedGameData.liveData?.linescore;
+                        console.log('Extracted linescore:', linescore);
+                        
+                        // Extract current batter information
+                        const liveData = detailedGameData.liveData;
+                        const currentBatter = liveData?.plays?.currentPlay?.matchup?.batter || 
+                                            liveData?.boxscore?.teams?.home?.players || 
+                                            liveData?.boxscore?.teams?.away?.players;
+                        console.log('Current batter data:', currentBatter);
+                        
+                        // Merge the detailed data with the schedule data
+                        const enhancedGame = {
+                            ...game,
+                            linescore: linescore || game.linescore,
+                            currentBatter: currentBatter
+                        };
+                        
+                        return this.processMLBGameData(enhancedGame);
+                    } else {
+                        console.log('Failed to fetch detailed game data, using schedule data');
+                        console.log('Detailed feed response status:', detailedGameResponse.status);
+                        
+                        // Even if detailed feed fails, we can still show basic game info
+                        // For live games without detailed data, show "Live" as inning
+                        const basicGame = {
+                            ...game,
+                            linescore: {
+                                currentInning: 'Live',
+                                inningHalf: null
+                            }
+                        };
+                        
+                        return this.processMLBGameData(basicGame);
+                    }
+                }
+                
                 return this.processMLBGameData(game);
             } else {
                 console.log('No game found today, checking upcoming games...');
+                console.log('Upcoming games URL:', `https://statsapi.mlb.com/api/v1/schedule?teamId=${astrosTeamId}&startDate=${today}&endDate=${this.getDateInFuture(7)}&sportId=1`);
                 // No game today, check for upcoming games
                 const upcomingResponse = await fetch(`https://statsapi.mlb.com/api/v1/schedule?teamId=${astrosTeamId}&startDate=${today}&endDate=${this.getDateInFuture(7)}&sportId=1`);
                 
@@ -215,8 +288,16 @@ class AstrosLiveScore {
             
         } catch (error) {
             console.error('Error fetching MLB data:', error);
-            // Fallback to mock data if API fails
-            return this.getMockGameData();
+            // Only fallback to mock data if we can't get any real data
+            if (!scheduleData || !scheduleData.dates || scheduleData.dates.length === 0) {
+                console.log('No schedule data available, using mock data');
+                return this.getMockGameData();
+            } else {
+                console.log('Using real game data even if linescore is missing');
+                // Process the real game data even if linescore is missing
+                const game = scheduleData.dates[0].games[0];
+                return this.processMLBGameData(game);
+            }
         }
     }
 
@@ -227,19 +308,40 @@ class AstrosLiveScore {
         const astrosScore = astrosTeam.score || 0;
         const opponentScore = opponentTeam.score || 0;
         
+        // Determine home and away teams
+        const isAstrosHome = game.teams.home.team.name === 'Houston Astros';
+        const astrosLabel = isAstrosHome ? 'HOME' : 'AWAY';
+        const opponentLabel = isAstrosHome ? 'AWAY' : 'HOME';
+        
         let status = game.status.detailedState;
         let isLive = false;
+        
+        // Also check abstractGameState which might indicate live status
+        const abstractGameState = game.status.abstractGameState;
+        console.log('Status analysis:', {
+            detailedState: game.status.detailedState,
+            abstractGameState: abstractGameState,
+            statusCode: game.status.statusCode
+        });
         
         console.log('Processing game data:', {
             originalStatus: game.status,
             detailedState: status,
-            isUpcoming: isUpcoming
+            isUpcoming: isUpcoming,
+            statusCode: game.status.statusCode,
+            abstractGameState: game.status.abstractGameState
         });
         
-        if (status === 'Live' || status === 'In Progress') {
+        // Debug linescore data
+        console.log('Linescore data:', game.linescore);
+        console.log('Full game object structure:', Object.keys(game));
+        
+        if (status === 'Live' || status === 'In Progress' || status === 'Warmup' || 
+            status === 'Delayed' || status === 'Suspended' || status === 'Rain Delay' ||
+            abstractGameState === 'Live') {
             isLive = true;
             status = 'Live';
-        } else if (status === 'Final') {
+        } else if (status === 'Final' || abstractGameState === 'Final') {
             status = 'Final';
         } else if (isUpcoming) {
             status = 'Scheduled';
@@ -254,6 +356,30 @@ class AstrosLiveScore {
             timeZoneName: 'short'
         });
         
+        // Extract ball and strike count from live game data
+        let balls = 'N/A';
+        let strikes = 'N/A';
+        
+        if (isLive && game.linescore) {
+            // Try to get count from linescore data
+            if (game.linescore.balls !== undefined) {
+                balls = game.linescore.balls;
+            }
+            if (game.linescore.strikes !== undefined) {
+                strikes = game.linescore.strikes;
+            }
+        }
+        
+        // Extract current batter information
+        let currentBatter = 'N/A';
+        if (isLive && game.currentBatter) {
+            if (typeof game.currentBatter === 'object' && game.currentBatter.fullName) {
+                currentBatter = game.currentBatter.fullName;
+            } else if (typeof game.currentBatter === 'string') {
+                currentBatter = game.currentBatter;
+            }
+        }
+        
         return {
             isLive: isLive,
             astrosScore: astrosScore,
@@ -264,22 +390,69 @@ class AstrosLiveScore {
             status: status,
             time: timeString,
             venue: game.venue.name,
-            isWinning: astrosScore > opponentScore ? true : astrosScore < opponentScore ? false : null
+            isWinning: astrosScore > opponentScore ? true : astrosScore < opponentScore ? false : null,
+            balls: balls,
+            strikes: strikes,
+            currentBatter: currentBatter,
+            astrosLabel: astrosLabel,
+            opponentLabel: opponentLabel
         };
     }
 
     getInningString(linescore) {
-        if (!linescore || !linescore.currentInning) {
+        console.log('getInningString called with:', linescore);
+        
+        if (!linescore) {
+            console.log('No linescore data available');
             return 'N/A';
         }
         
-        const inning = linescore.currentInning;
-        const half = linescore.inningHalf;
+        // Check different possible structures for inning data
+        const currentInning = linescore.currentInning || linescore.inning || linescore.currentInningOrdinal;
+        const inningHalf = linescore.inningHalf || linescore.half;
         
-        if (linescore.isTopInning) {
-            return `${inning}${half === 'T' ? 'th Top' : 'th Bottom'}`;
+        console.log('Inning data found:', { currentInning, inningHalf });
+        
+        if (!currentInning) {
+            console.log('No current inning found in linescore');
+            return 'N/A';
+        }
+        
+        // Handle special cases
+        if (currentInning === 'Live' || currentInning === 'In Progress') {
+            return 'Live';
+        }
+        
+        // Handle different inning formats
+        let inningNumber = currentInning;
+        let inningOrdinal = linescore.currentInningOrdinal;
+        
+        if (typeof currentInning === 'string') {
+            // Remove any ordinal suffixes (th, st, nd, rd) and extract number
+            inningNumber = currentInning.replace(/(\d+)(st|nd|rd|th)/, '$1');
+        }
+        
+        // Use the ordinal if available, otherwise construct it
+        if (inningOrdinal) {
+            inningNumber = inningOrdinal;
         } else {
-            return `${inning}th`;
+            // Construct ordinal from number
+            const num = parseInt(inningNumber);
+            if (num === 1) inningNumber = '1st';
+            else if (num === 2) inningNumber = '2nd';
+            else if (num === 3) inningNumber = '3rd';
+            else inningNumber = num + 'th';
+        }
+        
+        // Handle different inning states
+        if (inningHalf === 'T' || inningHalf === 'Top') {
+            return `${inningNumber} Top`;
+        } else if (inningHalf === 'B' || inningHalf === 'Bottom') {
+            return `${inningNumber} Bottom`;
+        } else if (inningHalf === 'M' || inningHalf === 'Middle') {
+            return `${inningNumber} Middle`;
+        } else {
+            return inningNumber;
         }
     }
 
@@ -653,34 +826,42 @@ class AstrosLiveScore {
             
             <div class="game-info">
                 ${isMobile ? `
-                                    <div class="team">
-                    <div class="team-logo">
-                        <img src="https://www.mlbstatic.com/team-logos/team-cap-on-dark/117.svg" alt="Houston Astros" onerror="this.style.display='none'">
+                    <div class="team">
+                        <div class="team-logo">
+                            <img src="https://www.mlbstatic.com/team-logos/team-cap-on-dark/117.svg" alt="Houston Astros" onerror="this.style.display='none'">
+                        </div>
+                        <div class="team-name">Houston Astros</div>
+                        <div class="team-label">${gameData.astrosLabel}</div>
+                        <div class="team-score astros">${gameData.astrosScore}</div>
                     </div>
-                    <div class="team-name">Houston Astros</div>
-                    <div class="team-score astros">${gameData.astrosScore}</div>
-                </div>
-                <div class="team">
-                    <div class="team-logo">
-                        <img src="https://www.mlbstatic.com/team-logos/team-cap-on-dark/${gameData.opponentTeamId}.svg" alt="${gameData.opponent}" onerror="this.style.display='none'">
+                    <div class="team">
+                        <div class="team-logo">
+                            <img src="https://www.mlbstatic.com/team-logos/team-cap-on-dark/${gameData.opponentTeamId}.svg" alt="${gameData.opponent}" onerror="this.style.display='none'">
+                        </div>
+                        <div class="team-name">${gameData.opponent}</div>
+                        <div class="team-label">${gameData.opponentLabel}</div>
+                        <div class="team-score opponent" style="color: ${this.getOpponentTeamColor(gameData.opponentTeamId)};">${gameData.opponentScore}</div>
                     </div>
-                    <div class="team-name">${gameData.opponent}</div>
-                    <div class="team-score opponent" style="color: ${this.getOpponentTeamColor(gameData.opponentTeamId)};">${gameData.opponentScore}</div>
-                </div>
                 ` : `
                     <div class="team">
                         <div class="team-logo">
                             <img src="https://www.mlbstatic.com/team-logos/team-cap-on-dark/117.svg" alt="Houston Astros" onerror="this.style.display='none'">
                         </div>
                         <div class="team-name">Houston Astros</div>
+                        <div class="team-label">${gameData.astrosLabel}</div>
                         <div class="team-score astros">${gameData.astrosScore}</div>
                     </div>
-                    <div class="vs">VS</div>
+                    <div class="vs-container">
+                        <div class="vs">VS</div>
+                        ${gameData.isLive && gameData.currentBatter !== 'N/A' ? `<div class="current-batter">At Bat: ${gameData.currentBatter}</div>` : ''}
+                        ${gameData.isLive ? `<div class="count-display">${gameData.balls}-${gameData.strikes}</div>` : ''}
+                    </div>
                     <div class="team">
                         <div class="team-logo">
                             <img src="https://www.mlbstatic.com/team-logos/team-cap-on-dark/${gameData.opponentTeamId}.svg" alt="${gameData.opponent}" onerror="this.style.display='none'">
                         </div>
                         <div class="team-name">${gameData.opponent}</div>
+                        <div class="team-label">${gameData.opponentLabel}</div>
                         <div class="team-score opponent" style="color: ${this.getOpponentTeamColor(gameData.opponentTeamId)};">${gameData.opponentScore}</div>
                     </div>
                 `}
