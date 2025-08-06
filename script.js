@@ -89,6 +89,9 @@ class AstrosLiveScore {
         // Add mobile-friendly touch events
         this.addMobileTouchSupport();
         
+        // Setup collapsible widget
+        this.setupCollapsibleWidget();
+        
         // Initial load
         this.fetchGameData();
         this.fetchLastGameData();
@@ -143,6 +146,51 @@ class AstrosLiveScore {
         }
     }
 
+                        setupCollapsibleWidget() {
+                        const lastGameHeader = document.getElementById('lastGameHeader');
+                        const lastGameContent = document.getElementById('lastGameContent');
+                        const collapseBtn = document.getElementById('lastGameCollapseBtn');
+                        
+                        if (!lastGameHeader || !lastGameContent || !collapseBtn) {
+                            console.warn('Collapsible widget elements not found');
+                            return;
+                        }
+                        
+                        // Initialize state (collapsed by default)
+                        let isCollapsed = true;
+                        
+                        // Start collapsed
+                        lastGameContent.classList.add('collapsed');
+                        collapseBtn.classList.add('collapsed');
+        
+        const toggleCollapse = () => {
+            isCollapsed = !isCollapsed;
+            
+            if (isCollapsed) {
+                lastGameContent.classList.add('collapsed');
+                collapseBtn.classList.add('collapsed');
+            } else {
+                lastGameContent.classList.remove('collapsed');
+                collapseBtn.classList.remove('collapsed');
+            }
+        };
+        
+        // Add click event to header
+        lastGameHeader.addEventListener('click', (e) => {
+            // Don't trigger if clicking the button directly
+            if (e.target.closest('.collapse-btn')) {
+                return;
+            }
+            toggleCollapse();
+        });
+        
+        // Add click event to button
+        collapseBtn.addEventListener('click', (e) => {
+            e.stopPropagation(); // Prevent header click
+            toggleCollapse();
+        });
+    }
+
     getOpponentTeamColor(teamId) {
         return this.teamColors[teamId] || '#ffffff'; // Default to white if team not found
     }
@@ -180,7 +228,7 @@ class AstrosLiveScore {
             
         } catch (error) {
             console.error('Error fetching game data:', error);
-            this.showError('Failed to fetch game data. Please try again.');
+            this.showError('Failed to fetch game data. Please check your connection and try again.');
         }
     }
 
@@ -190,64 +238,89 @@ class AstrosLiveScore {
         const astrosTeamId = '117'; // Houston Astros team ID
         let scheduleData = null;
         
-        console.log('Requesting game data for date:', today);
-        console.log('Current browser time:', new Date().toISOString());
-        console.log('Current browser date:', new Date().toLocaleDateString());
-        
         try {
+            // Add timeout to fetch requests
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+            
             // First, get today's schedule for the Astros
-            const scheduleResponse = await fetch(`https://statsapi.mlb.com/api/v1/schedule?teamId=${astrosTeamId}&date=${today}&sportId=1`);
+            const scheduleResponse = await fetch(`https://statsapi.mlb.com/api/v1/schedule?teamId=${astrosTeamId}&date=${today}&sportId=1`, {
+                signal: controller.signal
+            });
+            
+            clearTimeout(timeoutId);
             
             if (!scheduleResponse.ok) {
-                throw new Error('Failed to fetch schedule data');
+                throw new Error(`Failed to fetch schedule data: ${scheduleResponse.status}`);
             }
             
             scheduleData = await scheduleResponse.json();
-            console.log('Schedule API response:', scheduleData);
-            console.log('API URL requested:', `https://statsapi.mlb.com/api/v1/schedule?teamId=${astrosTeamId}&date=${today}&sportId=1`);
             
             // Check if there's a game today
             if (scheduleData.dates && scheduleData.dates.length > 0 && scheduleData.dates[0].games.length > 0) {
                 const game = scheduleData.dates[0].games[0];
-                console.log('Found game today:', game);
-                console.log('Game ID:', game.gamePk);
-                console.log('Game status:', game.status);
                 
                         // If it's a live game, fetch detailed game data to get linescore and batter info
         if (game.status.detailedState === 'Live' || game.status.detailedState === 'In Progress' || 
             game.status.detailedState === 'Warmup' || game.status.detailedState === 'Delayed' || 
             game.status.detailedState === 'Suspended' || game.status.detailedState === 'Rain Delay' ||
             game.status.abstractGameState === 'Live') {
-                    console.log('Game is live, fetching detailed game data...');
-                    const detailedGameResponse = await fetch(`https://statsapi.mlb.com/api/v1.1/game/${game.gamePk}/feed/live`);
+                    const detailedController = new AbortController();
+                    const detailedTimeoutId = setTimeout(() => detailedController.abort(), 8000); // 8 second timeout
+                    
+                    const detailedGameResponse = await fetch(`https://statsapi.mlb.com/api/v1.1/game/${game.gamePk}/feed/live`, {
+                        signal: detailedController.signal
+                    });
+                    
+                    clearTimeout(detailedTimeoutId);
                     
                     if (detailedGameResponse.ok) {
                         const detailedGameData = await detailedGameResponse.json();
-                        console.log('Detailed game data:', detailedGameData);
                         
                         // Extract linescore from the detailed data
                         const linescore = detailedGameData.liveData?.linescore;
-                        console.log('Extracted linescore:', linescore);
                         
                         // Extract current batter information
                         const liveData = detailedGameData.liveData;
                         const currentBatter = liveData?.plays?.currentPlay?.matchup?.batter || 
                                             liveData?.boxscore?.teams?.home?.players || 
                                             liveData?.boxscore?.teams?.away?.players;
-                        console.log('Current batter data:', currentBatter);
+                        
+                        // Extract last play information
+                        let lastPlay = 'No recent plays';
+                        if (liveData?.plays?.allPlays && liveData.plays.allPlays.length > 0) {
+                            const lastPlayData = liveData.plays.allPlays[liveData.plays.allPlays.length - 1];
+                            
+                            // Try to get the most descriptive play description
+                            if (lastPlayData.result && lastPlayData.result.description) {
+                                lastPlay = lastPlayData.result.description;
+                            } else if (lastPlayData.playEvents && lastPlayData.playEvents.length > 0) {
+                                // Look for the most recent event with a good description
+                                for (let i = lastPlayData.playEvents.length - 1; i >= 0; i--) {
+                                    const event = lastPlayData.playEvents[i];
+                                    if (event.details && event.details.description) {
+                                        lastPlay = event.details.description;
+                                        break;
+                                    }
+                                }
+                            }
+                            
+                            // If we still don't have a good description, try the play description itself
+                            if (lastPlay === 'No recent plays' && lastPlayData.description) {
+                                lastPlay = lastPlayData.description;
+                            }
+                        }
                         
                         // Merge the detailed data with the schedule data
                         const enhancedGame = {
                             ...game,
                             linescore: linescore || game.linescore,
-                            currentBatter: currentBatter
+                            currentBatter: currentBatter,
+                            lastPlay: lastPlay
                         };
                         
                         return this.processMLBGameData(enhancedGame);
                     } else {
-                        console.log('Failed to fetch detailed game data, using schedule data');
-                        console.log('Detailed feed response status:', detailedGameResponse.status);
-                        
                         // Even if detailed feed fails, we can still show basic game info
                         // For live games without detailed data, show "Live" as inning
                         const basicGame = {
@@ -264,36 +337,42 @@ class AstrosLiveScore {
                 
                 return this.processMLBGameData(game);
             } else {
-                console.log('No game found today, checking upcoming games...');
-                console.log('Upcoming games URL:', `https://statsapi.mlb.com/api/v1/schedule?teamId=${astrosTeamId}&startDate=${today}&endDate=${this.getDateInFuture(7)}&sportId=1`);
                 // No game today, check for upcoming games
-                const upcomingResponse = await fetch(`https://statsapi.mlb.com/api/v1/schedule?teamId=${astrosTeamId}&startDate=${today}&endDate=${this.getDateInFuture(7)}&sportId=1`);
+                const upcomingController = new AbortController();
+                const upcomingTimeoutId = setTimeout(() => upcomingController.abort(), 8000);
+                
+                const upcomingResponse = await fetch(`https://statsapi.mlb.com/api/v1/schedule?teamId=${astrosTeamId}&startDate=${today}&endDate=${this.getDateInFuture(7)}&sportId=1`, {
+                    signal: upcomingController.signal
+                });
+                
+                clearTimeout(upcomingTimeoutId);
                 
                 if (!upcomingResponse.ok) {
-                    throw new Error('Failed to fetch upcoming games');
+                    throw new Error(`Failed to fetch upcoming games: ${upcomingResponse.status}`);
                 }
                 
                 const upcomingData = await upcomingResponse.json();
-                console.log('Upcoming games response:', upcomingData);
                 
                 if (upcomingData.dates && upcomingData.dates.length > 0 && upcomingData.dates[0].games.length > 0) {
                     const upcomingGame = upcomingData.dates[0].games[0];
-                    console.log('Found upcoming game:', upcomingGame);
                     return this.processMLBGameData(upcomingGame, true);
                 } else {
-                    console.log('No upcoming games found');
                     return this.getNoGameData();
                 }
             }
             
         } catch (error) {
             console.error('Error fetching MLB data:', error);
+            
+            // Handle specific error types
+            if (error.name === 'AbortError') {
+                throw new Error('Request timed out. Please check your connection and try again.');
+            }
+            
             // Only fallback to mock data if we can't get any real data
             if (!scheduleData || !scheduleData.dates || scheduleData.dates.length === 0) {
-                console.log('No schedule data available, using mock data');
                 return this.getMockGameData();
             } else {
-                console.log('Using real game data even if linescore is missing');
                 // Process the real game data even if linescore is missing
                 const game = scheduleData.dates[0].games[0];
                 return this.processMLBGameData(game);
@@ -318,23 +397,6 @@ class AstrosLiveScore {
         
         // Also check abstractGameState which might indicate live status
         const abstractGameState = game.status.abstractGameState;
-        console.log('Status analysis:', {
-            detailedState: game.status.detailedState,
-            abstractGameState: abstractGameState,
-            statusCode: game.status.statusCode
-        });
-        
-        console.log('Processing game data:', {
-            originalStatus: game.status,
-            detailedState: status,
-            isUpcoming: isUpcoming,
-            statusCode: game.status.statusCode,
-            abstractGameState: game.status.abstractGameState
-        });
-        
-        // Debug linescore data
-        console.log('Linescore data:', game.linescore);
-        console.log('Full game object structure:', Object.keys(game));
         
         if (status === 'Live' || status === 'In Progress' || status === 'Warmup' || 
             status === 'Delayed' || status === 'Suspended' || status === 'Rain Delay' ||
@@ -346,8 +408,6 @@ class AstrosLiveScore {
         } else if (isUpcoming) {
             status = 'Scheduled';
         }
-        
-        console.log('Processed status:', { status, isLive });
         
         const gameTime = new Date(game.gameDate);
         const timeString = gameTime.toLocaleTimeString('en-US', { 
@@ -395,15 +455,14 @@ class AstrosLiveScore {
             strikes: strikes,
             currentBatter: currentBatter,
             astrosLabel: astrosLabel,
-            opponentLabel: opponentLabel
+            opponentLabel: opponentLabel,
+            lastPlay: game.lastPlay || 'No recent plays'
         };
     }
 
     getInningString(linescore) {
-        console.log('getInningString called with:', linescore);
         
         if (!linescore) {
-            console.log('No linescore data available');
             return 'N/A';
         }
         
@@ -411,10 +470,7 @@ class AstrosLiveScore {
         const currentInning = linescore.currentInning || linescore.inning || linescore.currentInningOrdinal;
         const inningHalf = linescore.inningHalf || linescore.half;
         
-        console.log('Inning data found:', { currentInning, inningHalf });
-        
         if (!currentInning) {
-            console.log('No current inning found in linescore');
             return 'N/A';
         }
         
@@ -479,8 +535,6 @@ class AstrosLiveScore {
 
     async getMockGameData() {
         // Fallback mock data if API fails
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
         const mockGames = [
             {
                 isLive: true,
@@ -549,16 +603,24 @@ class AstrosLiveScore {
         const today = new Date();
         const yesterday = new Date(today);
         yesterday.setDate(today.getDate() - 1);
-        const yesterdayStr = yesterday.toISOString().split('T')[0];
+        const yesterdayStr = yesterday.toLocaleDateString('en-CA'); // Use local date instead of UTC
         
         const astrosTeamId = '117';
         
         try {
+            // Add timeout protection
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 8000);
+            
             // Get yesterday's games
-            const response = await fetch(`https://statsapi.mlb.com/api/v1/schedule?teamId=${astrosTeamId}&date=${yesterdayStr}&sportId=1`);
+            const response = await fetch(`https://statsapi.mlb.com/api/v1/schedule?teamId=${astrosTeamId}&date=${yesterdayStr}&sportId=1`, {
+                signal: controller.signal
+            });
+            
+            clearTimeout(timeoutId);
             
             if (!response.ok) {
-                throw new Error('Failed to fetch last game data');
+                throw new Error(`Failed to fetch last game data: ${response.status}`);
             }
             
             const data = await response.json();
@@ -571,12 +633,19 @@ class AstrosLiveScore {
                 // Check for games in the last 7 days
                 const weekAgo = new Date(today);
                 weekAgo.setDate(today.getDate() - 7);
-                const weekAgoStr = weekAgo.toISOString().split('T')[0];
+                const weekAgoStr = weekAgo.toLocaleDateString('en-CA'); // Use local date instead of UTC
                 
-                const weekResponse = await fetch(`https://statsapi.mlb.com/api/v1/schedule?teamId=${astrosTeamId}&startDate=${weekAgoStr}&endDate=${yesterdayStr}&sportId=1`);
+                const weekController = new AbortController();
+                const weekTimeoutId = setTimeout(() => weekController.abort(), 8000);
+                
+                const weekResponse = await fetch(`https://statsapi.mlb.com/api/v1/schedule?teamId=${astrosTeamId}&startDate=${weekAgoStr}&endDate=${yesterdayStr}&sportId=1`, {
+                    signal: weekController.signal
+                });
+                
+                clearTimeout(weekTimeoutId);
                 
                 if (!weekResponse.ok) {
-                    throw new Error('Failed to fetch recent games');
+                    throw new Error(`Failed to fetch recent games: ${weekResponse.status}`);
                 }
                 
                 const weekData = await weekResponse.json();
@@ -602,6 +671,12 @@ class AstrosLiveScore {
             
         } catch (error) {
             console.error('Error fetching last MLB game data:', error);
+            
+            // Handle timeout errors
+            if (error.name === 'AbortError') {
+                throw new Error('Request timed out. Please check your connection and try again.');
+            }
+            
             return this.getMockLastGameData();
         }
     }
@@ -659,8 +734,6 @@ class AstrosLiveScore {
 
     async getMockLastGameData() {
         // Fallback mock data for last game
-        await new Promise(resolve => setTimeout(resolve, 300));
-        
         const mockLastGames = [
             {
                 astrosScore: 6,
@@ -820,11 +893,11 @@ class AstrosLiveScore {
                 <span class="status-badge status-${gameData.status.toLowerCase()}">${gameData.status}</span>
             </div>
             
-            <div class="winning-indicator ${winningStatus.class}">
-                ${winningStatus.message}
-            </div>
-            
-            <div class="game-info">
+                         <div class="winning-indicator ${winningStatus.class}">
+                 ${winningStatus.message}
+             </div>
+             
+             <div class="game-info">
                 ${isMobile ? `
                     <div class="team">
                         <div class="team-logo">
@@ -918,40 +991,6 @@ class AstrosLiveScore {
         }, 200);
     }
 
-    // updateQuickStatus(gameData) { // Removed
-    //     let answer = '';
-    //     let className = '';
-        
-    //     if (gameData.isWinning === null) {
-    //         // No game or game not started
-    //         answer = 'No Game';
-    //         className = 'no-game';
-    //     } else if (gameData.astrosScore === gameData.opponentScore) {
-    //         // Game is tied
-    //         answer = 'TIE';
-    //         className = 'tie';
-    //     } else if (gameData.isWinning) {
-    //         // Astros are winning
-    //         answer = 'YES';
-    //         className = 'yes';
-    //     } else {
-    //         // Astros are losing
-    //         answer = 'NO';
-    //         className = 'no';
-    //     }
-        
-    //     // Debug logging
-    //     console.log('Quick Status Update:', { answer, className, gameData });
-        
-    //     if (this.quickStatusAnswer) {
-    //         this.quickStatusAnswer.textContent = answer;
-    //         this.quickStatusAnswer.className = `quick-status-answer ${className}`;
-    //         console.log('Updated quick status element:', this.quickStatusAnswer);
-    //     } else {
-    //         console.error('Quick status answer element not found!');
-    //     }
-    // }
-
     getWinningStatus(gameData) {
         if (gameData.isWinning === null) {
             return {
@@ -1034,7 +1073,10 @@ class AstrosLiveScore {
         };
         
         const performRefresh = () => {
-            this.fetchGameData();
+            // Only refresh if the page is visible
+            if (!document.hidden) {
+                this.fetchGameData();
+            }
             
             // Update interval based on current game status
             const newInterval = getRefreshInterval();
@@ -1046,6 +1088,16 @@ class AstrosLiveScore {
         
         // Start with initial interval
         this.autoRefreshInterval = setInterval(performRefresh, getRefreshInterval());
+        
+        // Pause auto-refresh when page is hidden, resume when visible
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                this.stopAutoRefresh();
+            } else {
+                // Resume auto-refresh when page becomes visible
+                this.startAutoRefresh();
+            }
+        });
     }
 
     stopAutoRefresh() {

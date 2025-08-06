@@ -7,6 +7,26 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="format-detection" content="telephone=no">
+    
+    <!-- SEO Meta Tags -->
+    <meta name="description" content="Real-time Houston Astros game updates. Check if the Astros are winning, view live scores, and track game status with beautiful team logos and dynamic colors.">
+    <meta name="keywords" content="Houston Astros, MLB, baseball, live score, game updates, Astros winning">
+    <meta name="author" content="Are The Astros Winning">
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://aretheastroswinning.com/">
+    <meta property="og:title" content="Are The Astros Winning?">
+    <meta property="og:description" content="Real-time Houston Astros game updates. Check if the Astros are winning, view live scores, and track game status.">
+    <meta property="og:image" content="https://www.mlbstatic.com/team-logos/team-cap-on-dark/117.svg">
+    
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="https://aretheastroswinning.com/">
+    <meta property="twitter:title" content="Are The Astros Winning?">
+    <meta property="twitter:description" content="Real-time Houston Astros game updates. Check if the Astros are winning, view live scores, and track game status.">
+    <meta property="twitter:image" content="https://www.mlbstatic.com/team-logos/team-cap-on-dark/117.svg">
+    
     <title>Are The Astros Winning?</title>
     <link rel="icon" type="image/svg+xml" href="https://www.mlbstatic.com/team-logos/team-cap-on-dark/117.svg">
     <link rel="stylesheet" href="styles.css">
@@ -16,15 +36,15 @@
 <body>
     <div class="container">
         <header>
-            <h1><i class="fas fa-baseball-ball"></i> Are The Astros Winning?</h1>
+            <h1><i class="fas fa-baseball-ball" aria-hidden="true"></i> Are The Astros Winning?</h1>
             <p class="subtitle">Real-time game updates</p>
             <div class="controls">
-                <button id="refreshBtn" class="refresh-btn">
-                    <i class="fas fa-sync-alt"></i> Refresh
+                <button id="refreshBtn" class="refresh-btn" aria-label="Refresh game data">
+                    <i class="fas fa-sync-alt" aria-hidden="true"></i> Refresh
                 </button>
                 <div class="status-info">
                     <div class="status-indicator" id="statusIndicator">
-                        <div class="status-dot"></div>
+                        <div class="status-dot" aria-hidden="true"></div>
                         <span id="statusText">Checking for live games...</span>
                     </div>
                     <div class="last-updated">
@@ -37,16 +57,21 @@
         <main>
             <div class="game-card" id="gameCard">
                 <div class="loading">
-                    <div class="spinner"></div>
+                    <div class="spinner" aria-hidden="true"></div>
                     <p>Loading game data...</p>
                 </div>
             </div>
 
             <div class="last-game-widget" id="lastGameWidget">
-                <h3><i class="fas fa-history"></i> Last Game</h3>
+                <div class="last-game-header" id="lastGameHeader">
+                    <h3><i class="fas fa-history" aria-hidden="true"></i> Last Game</h3>
+                    <button class="collapse-btn" id="lastGameCollapseBtn" aria-label="Toggle last game details">
+                        <i class="fas fa-chevron-up" aria-hidden="true"></i>
+                    </button>
+                </div>
                 <div class="last-game-content" id="lastGameContent">
                     <div class="loading">
-                        <div class="spinner"></div>
+                        <div class="spinner" aria-hidden="true"></div>
                         <p>Loading last game...</p>
                     </div>
                 </div>
